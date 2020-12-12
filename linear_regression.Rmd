@@ -92,7 +92,7 @@ qqnorm(trans_hate_crime_df$hate_crimes_per_100k_splc, col=2, pch=19, cex=1.5)
 qqline(trans_hate_crime_df$hate_crimes_per_100k_splc, col = 1,lwd=2,lty=2)
 ```
 
-Much better.
+It's much better now.
  
 ## Outliers
 
@@ -104,9 +104,10 @@ trans_hate_crime_df %>%
   geom_point() +
   geom_smooth(method = "lm", se = F, color = "red") +
   labs(
-    x = "hate crime rate",
+    y = "ln hate crime rate",
+    x = "gini index",
     title = "Gini Index vs Hate Crime Rate",
-    caption = "Include all states except ones with NA"
+    caption = "Include all states except ones with NAs"
   )
 ```
 
@@ -126,7 +127,7 @@ plot(fit_all)
 Notice row 9 is a potential influential point. It's the reocord for
 District of Columbia, which has very high hate crime rate.
 
-Remove observation for District of Columbia
+Remove observation for District of Columbia and fit the full model again.
 
 ```{r}
 trans_hate_crime_df_no_dc = trans_hate_crime_df[-c(9),]
@@ -147,9 +148,10 @@ trans_hate_crime_df_no_dc %>%
   geom_point() +
   geom_smooth(method = "lm", se = F, color = "red") +
   labs(
-    x = "hate crime rate",
+    y = "ln hate crime rate",
+    x = "gini index",
     title = "Gini Index vs Hate Crime Rate",
-    caption = "Include all states except ones with NA"
+    caption = "Exclude District of Columbia"
   )
 ```
 
@@ -168,7 +170,8 @@ Correlation matrix for all variables
   ) %>% 
   cor(.,method = "pearson") %>% 
   round(.,digits = 2) %>% 
-  head()
+  head() %>% 
+  knitr::kable()
 ```
 
 We can see that
