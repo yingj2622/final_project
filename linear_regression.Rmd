@@ -38,8 +38,8 @@ hate_crime_df =
   drop_na() %>% 
   mutate(
     hate_crimes_per_100k_splc = as.numeric(hate_crimes_per_100k_splc),
-    unemployment = as.factor(unemployment),
-    urbanization = as.factor(urbanization)
+    unemployment = factor(unemployment, levels = c("low","high")),
+    urbanization = factor(urbanization, levels = c("low","high"))
   ) 
 ```
 
@@ -163,6 +163,10 @@ Correlation matrix for all variables
 
 ```{r}
   trans_hate_crime_df_no_dc %>% 
+  rename(
+    perc_hs_degree = perc_population_with_high_school_degree,
+    hate_crime_rate = hate_crimes_per_100k_splc
+  ) %>% 
   dplyr::select(-state) %>% 
   mutate(
     unemployment = as.numeric(unemployment),
