@@ -10,6 +10,8 @@ library(corrplot)
 library(HH)
 library(leaps)
 library(olsrr)
+library(mgcv)
+library(modelr)
 ```
 
 ## Import dataset
@@ -42,6 +44,15 @@ hate_crime_df =
     urbanization = factor(urbanization, levels = c("low","high"))
   ) 
 ```
+
+## Descriptive Data Analysis
+
+Below is a summary table of all continuous variables, including the response.
+
+```{r}
+
+```
+
 
 ## Normality Test
 
@@ -182,7 +193,7 @@ We can see that
 
 * `perc_non_white` and `perc_non_citizen` are highly correlated (0.73).
 
-* `urbanization` and `perc_non_citizen` are moderately correlated (-0.67)
+* `urbanization` and `perc_non_citizen` are moderately correlated (0.67)
 
 * `perc_population_with_high_school_degree` and `median_household_income`
 are moderately correlated (0.66)
@@ -195,7 +206,7 @@ VIF
 vif(fit_all_no_dc)
 ```
 
-`perc_population_with_high_school_degree` has quite high vif. Then we test whether remove `perc_population_with_high_school_degree` influence the regression results.
+`perc_population_with_high_school_degree` and `perc_non_citizen` has quite high vif, while none of them exceed 5. Then we test whether removing `perc_population_with_high_school_degree` influences the regression results.
 
 ```{r}
 fit_all_no_degree = lm(hate_crimes_per_100k_splc ~.-state -perc_population_with_high_school_degree, data = trans_hate_crime_df_no_dc)
@@ -203,7 +214,7 @@ fit_all_no_degree = lm(hate_crimes_per_100k_splc ~.-state -perc_population_with_
 summary(fit_all_no_degree)
 ```
 
-The estimate for median_household_income change from negative to positive. While the adjusted R_squared reduces from 0.057 to 0.027, we believe adding  `perc_population_with_high_school_degree` is not redundant.
+The estimate for median_household_income change from negative to positive. While the standard error doesn't inflated and the adjusted R_squared reduces from 0.057 to 0.027, we believe adding  `perc_population_with_high_school_degree` is not redundant.
 
 ANOVA
 
@@ -213,7 +224,7 @@ anova(fit_all_no_degree, fit_all_no_dc)
 
 P_value = 0.1482>0.05
 
-Remove `perc_non_citizen` and see the effect on regression model
+So we decide to remove `perc_non_citizen` and see the effect on regression model
 
 ```{r}
 fit_all_no_citizen = lm(hate_crimes_per_100k_splc ~.-state -perc_non_citizen, data = trans_hate_crime_df_no_dc)
@@ -242,21 +253,27 @@ hate_crime_reg_df =
 
 ## Predictor Selection
 
+Get started with the approximately optimal number of predictors for a linear model (select by C_p, Adj R^2, BIC, AIC).
+
 ```{r}
-b = regsubsets(hate_crimes_per_100k_splc ~ .-state, data = hate_crime_reg_df)
-rs = summary(b)
+reg_subsets = regsubsets(hate_crimes_per_100k_splc ~ .-state, data = hate_crime_reg_df)
+rs = summary(reg_subsets)
+rs
 ```
 
-Plots of Cp and Adj-R2 as functions of parameters
+Plots of C_p, Adj-R^2 and BIC for all the best subsets
 
 ```{r}
 par(mar=c(4,4,1,1))
-par(mfrow=c(1,2))
+par(mfrow=c(2,2))
 
 plot(2:7, rs$cp, xlab="No of parameters", ylab="Cp Statistic")
 abline(0,1)
 
 plot(2:7, rs$adjr2, xlab="No of parameters", ylab="Adj R2")
+
+plot(2:7, rs$bic, xlab="No of parameters", ylab="BIC")
+abline(0,1)
 ```
 
 Compare models with 2, 3, 4 predictors
@@ -285,9 +302,52 @@ multi_fit_4 =
   unnest(AIC:adj_r_sq)
 ```
 
-Choose the model with 3 predictors (hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index).
+(Note: BIC is more conservative than AIC by penalizing more on the number of parameters)
 
-## Interaction between Gini Index and Unemployment
+Note that the adjusted R2, BIC and Cp are calculated on the training data that have been used to fit the model. This means that, the model selection, using these metrics, is possibly subject to overfitting and may not perform as well when applied to new data.
+
+A more rigorous approach is to select a models based on the prediction error computed on a new test data using k-fold cross-validation techniques.
+
+## K-fold CV
+
+```{r}
+cv_df = 
+  hate_crime_reg_df %>% 
+  crossv_mc(1000) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  ) %>% 
+  mutate(
+    multi_fit_2 = map(.x = train, ~lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data=.x)),
+multi_fit_3 = 
+  map(.x = train, ~lm(hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index, data=.x)),
+multi_fit_4 = 
+  map(.x = train, ~lm(hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index + urbanization, data=.x))
+      ) %>% 
+  mutate(
+    rmse_fit_2 = map2_dbl(multi_fit_2, test, ~rmse(model = .x, data = .y)),
+    rmse_fit_3 = map2_dbl(multi_fit_3, test, ~rmse(model = .x, data = .y)),
+    rmse_fit_4 = map2_dbl(multi_fit_4, test, ~rmse(model = .x, data = .y)))
+```
+
+Make plots of RMSE vs model
+
+```{r}
+cv_df %>% 
+   dplyr::select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+## Model Modification
+
+### Interaction between Gini Index and Unemployment
 
 stratify by unemployment
 
@@ -300,6 +360,16 @@ hate_crime_reg_df %>%
 
 The two line are not parallel
 
+Add interaction between gini index and unemployment to the model
+
+```{r}
+multi_fit = lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment, data = hate_crime_reg_df)
+
+summary(multi_fit)
+```
+
+### Interaction between gini index and urbanization
+
 stratify by urbanization
 
 ```{r}
@@ -309,15 +379,6 @@ hate_crime_reg_df %>%
   geom_smooth(method = "lm", se = F)
 ```
 
-The two line are parallel
-
-Add interaction od gini index and unemployment to the model
-
-```{r}
-multi_fit = lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment, data = hate_crime_reg_df)
-
-summary(multi_fit)
-```
-
+The two line are parallel. There is no interatcion between gini index and urbanization
 
  
