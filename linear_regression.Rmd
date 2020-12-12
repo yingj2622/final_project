@@ -6,6 +6,311 @@ output: html_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
+library(corrplot)
+library(HH)
+library(leaps)
+library(olsrr)
+```
+
+## Import dataset
+
+```{r}
+hate_crime_data = 
+  read_csv("./HateCrimes.csv") %>% 
+  janitor::clean_names()
+```
+
+## Inspect NAs
+
+```{r}
+hate_crime_data %>% 
+  sapply(.,function(x) sum(is.na(x)))
+```
+
+Drop NAs
+
+```{r}
+hate_crime_df = 
+  hate_crime_data %>% 
+  naniar::replace_with_na(
+    replace = list(hate_crimes_per_100k_splc = "N/A")
+    ) %>% 
+  drop_na() %>% 
+  mutate(
+    hate_crimes_per_100k_splc = as.numeric(hate_crimes_per_100k_splc),
+    unemployment = as.factor(unemployment),
+    urbanization = as.factor(urbanization)
+  ) 
+```
+
+## Normality Test
+
+histogram
+
+```{r}
+hate_crime_df %>% 
+  ggplot(aes(x = hate_crimes_per_100k_splc, y = ..density..)) +
+  geom_histogram(colour = "black", alpha = 0.1) +
+  geom_density(alpha = 0.4) +
+  labs(
+    x = "hate crime rate",
+    title = "Distribution of Hate Crime Rate"
+  )
+```
+
+qq plot
+
+```{r}
+qqnorm(hate_crime_df$hate_crimes_per_100k_splc, col=2, pch=19, cex=1.5)
+qqline(hate_crime_df$hate_crimes_per_100k_splc, col = 1,lwd=2,lty=2)
+```
+
+The distribution of hate crime rate is heavily right skewed.
+
+## Tansformation
+
+distribution of ln(hate_crimes_per_100k_splc)
+
+```{r}
+trans_hate_crime_df =
+hate_crime_df %>% 
+  mutate(
+    hate_crimes_per_100k_splc = 
+      log(hate_crimes_per_100k_splc)
+  ) 
+
+trans_hate_crime_df %>% 
+  ggplot(aes(x = hate_crimes_per_100k_splc, y = ..density..)) +
+  geom_histogram(binwidth = 0.1, colour = "black", alpha = 0.1) +
+  geom_density(alpha = 0.4)
+```
+
+qq plot
+
+```{r}
+qqnorm(trans_hate_crime_df$hate_crimes_per_100k_splc, col=2, pch=19, cex=1.5)
+qqline(trans_hate_crime_df$hate_crimes_per_100k_splc, col = 1,lwd=2,lty=2)
+```
+
+Much better.
+ 
+## Outliers
+
+Make plot for gini_index vs hate crime rate
+
+```{r}
+trans_hate_crime_df %>% 
+ ggplot(aes(x = gini_index, y = hate_crimes_per_100k_splc)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F, color = "red") +
+  labs(
+    x = "hate crime rate",
+    title = "Gini Index vs Hate Crime Rate",
+    caption = "Include all states except ones with NA"
+  )
+```
+
+Based on the plot above, there is positive association between gini index and hate crime rate.
+
+Find potential influential outliers
+
+```{r}
+fit_all = lm(hate_crimes_per_100k_splc ~.-state, data = trans_hate_crime_df)
+
+summary(fit_all)
+
+par(mfrow=c(1,2))
+plot(fit_all)
+```
+
+Notice row 9 is a potential influential point. It's the reocord for
+District of Columbia, which has very high hate crime rate.
+
+Remove observation for District of Columbia
+
+```{r}
+trans_hate_crime_df_no_dc = trans_hate_crime_df[-c(9),]
+
+fit_all_no_dc = lm(hate_crimes_per_100k_splc ~.-state, data = trans_hate_crime_df_no_dc) 
+
+summary(fit_all_no_dc)
+
+par(mfrow=c(1,2))
+plot(fit_all_no_dc)
+```
+
+Then take a look again at the relationship between gini index and hate crime rate
+
+```{r}
+trans_hate_crime_df_no_dc %>% 
+ ggplot(aes(x = gini_index, y = hate_crimes_per_100k_splc)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F, color = "red") +
+  labs(
+    x = "hate crime rate",
+    title = "Gini Index vs Hate Crime Rate",
+    caption = "Include all states except ones with NA"
+  )
+```
+
+There is slightly negative association between gini index and hate crime rate. The regression line is nearly horizontal, implying there maybe no linear relationship between gini index and hate frime rate. Removing row 9 has changed the regression results, which means that it's influential. We should exclude row 9.
+ 
+## Test for Collinearity 
+
+Correlation matrix for all variables
+
+```{r}
+  trans_hate_crime_df_no_dc %>% 
+  dplyr::select(-state) %>% 
+  mutate(
+    unemployment = as.numeric(unemployment),
+    urbanization = as.numeric(urbanization)
+  ) %>% 
+  cor(.,method = "pearson") %>% 
+  round(.,digits = 2) %>% 
+  head()
+```
+
+We can see that
+
+* `perc_non_white` and `perc_non_citizen` are highly correlated (0.73).
+
+* `urbanization` and `perc_non_citizen` are moderately correlated (-0.67)
+
+* `perc_population_with_high_school_degree` and `median_household_income`
+are moderately correlated (0.66)
+
+* `gini_index` and `perc_population_with_high_school_degree` has moderate correlation (-0.66)
+
+VIF
+
+```{r}
+vif(fit_all_no_dc)
+```
+
+`perc_population_with_high_school_degree` has quite high vif. Then we test whether remove `perc_population_with_high_school_degree` influence the regression results.
+
+```{r}
+fit_all_no_degree = lm(hate_crimes_per_100k_splc ~.-state -perc_population_with_high_school_degree, data = trans_hate_crime_df_no_dc)
+
+summary(fit_all_no_degree)
+```
+
+The estimate for median_household_income change from negative to positive. While the adjusted R_squared reduces from 0.057 to 0.027, we believe adding  `perc_population_with_high_school_degree` is not redundant.
+
+ANOVA
+
+```{r}
+anova(fit_all_no_degree, fit_all_no_dc)
+```
+
+P_value = 0.1482>0.05
+
+Remove `perc_non_citizen` and see the effect on regression model
+
+```{r}
+fit_all_no_citizen = lm(hate_crimes_per_100k_splc ~.-state -perc_non_citizen, data = trans_hate_crime_df_no_dc)
+
+summary(fit_all_no_citizen)
+```
+
+After removing `perc_non_citizen`, adjusted R_squared increases from 0.057 to 0.080, meaning adding `perc_non_citizen` is redundant. 
+
+ANOVA
+
+```{r}
+anova(fit_all_no_citizen, fit_all_no_dc)
+```
+
+P_value = 0.7718>0.05
+
+Remove `perc_non_citizen`
+
+```{r}
+hate_crime_reg_df = 
+  trans_hate_crime_df_no_dc %>% 
+  dplyr::select(-perc_non_citizen)
 ```
 
 
+## Predictor Selection
+
+```{r}
+b = regsubsets(hate_crimes_per_100k_splc ~ .-state, data = hate_crime_reg_df)
+rs = summary(b)
+```
+
+Plots of Cp and Adj-R2 as functions of parameters
+
+```{r}
+par(mar=c(4,4,1,1))
+par(mfrow=c(1,2))
+
+plot(2:7, rs$cp, xlab="No of parameters", ylab="Cp Statistic")
+abline(0,1)
+
+plot(2:7, rs$adjr2, xlab="No of parameters", ylab="Adj R2")
+```
+
+Compare models with 2, 3, 4 predictors
+
+```{r}
+hate_crime_reg_df %>% 
+  nest(state:hate_crimes_per_100k_splc) %>% 
+  mutate(
+    multi_fit_2 = map(.x = data, ~lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data=.x)),
+multi_fit_3 = 
+  map(.x = data, ~lm(hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index, data=.x)),
+multi_fit_4 = 
+  map(.x = data, ~lm(hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index + urbanization, data=.x))
+  ) %>% 
+  pivot_longer(
+    multi_fit_2:multi_fit_4,
+    names_to = "model",
+    values_to = "results"
+  ) %>% 
+  mutate(
+    AIC = map(.x = results, ~AIC(.x)),
+    BIC = map(.x = results, ~BIC(.x)),
+    C_p = map(.x = results, ~ols_mallows_cp(.x, fit_all_no_citizen)),
+    adj_r_sq = map(.x = results, ~summary(.x)$adj.r.squared)
+  ) %>% 
+  unnest(AIC:adj_r_sq)
+```
+
+Choose the model with 3 predictors (hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index).
+
+##Interaction between Gini Index and Unemployment
+
+stratify by unemployment
+
+```{r}
+hate_crime_reg_df %>% 
+  ggplot(aes(x = gini_index, y = hate_crimes_per_100k_splc, color = unemployment)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F)
+```
+
+The two line are not parallel
+
+stratify by urbanization
+
+```{r}
+hate_crime_reg_df %>% 
+  ggplot(aes(x = gini_index, y = hate_crimes_per_100k_splc, color = urbanization)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F)
+```
+
+The two line are parallel
+
+Add interaction od gini index and unemployment to the model
+
+```{r}
+multi_fit = lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment, data = hate_crime_reg_df)
+
+summary(multi_fit)
+```
+
+
+ 
