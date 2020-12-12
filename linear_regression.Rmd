@@ -280,7 +280,7 @@ multi_fit_4 =
 
 Choose the model with 3 predictors (hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index).
 
-##Interaction between Gini Index and Unemployment
+## Interaction between Gini Index and Unemployment
 
 stratify by unemployment
 

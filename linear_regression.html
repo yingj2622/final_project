@@ -793,7 +793,9 @@ multi_fit_4 =
 ## 2 &lt;tibble [44 x 8]&gt; multi_fit_3 &lt;lm&gt;     78.7  87.6  2.05    0.125
 ## 3 &lt;tibble [44 x 8]&gt; multi_fit_4 &lt;lm&gt;     79.9  90.6  3.38    0.118</code></pre>
 <p>Choose the model with 3 predictors (hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index).</p>
-<p>##Interaction between Gini Index and Unemployment</p>
+</div>
+<div id="interaction-between-gini-index-and-unemployment" class="section level2">
+<h2>Interaction between Gini Index and Unemployment</h2>
 <p>stratify by unemployment</p>
 <pre class="r"><code>hate_crime_reg_df %&gt;% 
   ggplot(aes(x = gini_index, y = hate_crimes_per_100k_splc, color = unemployment)) +
