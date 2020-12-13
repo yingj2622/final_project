@@ -345,6 +345,13 @@ cv_df %>%
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
 
+We decide to choose the model with two predictors: perc_population_with_high_school_degree and gini_index
+
+```{r}
+multi_fit_start = lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data=hate_crime_reg_df)
+```
+
+
 ## Model Modification
 
 ### Interaction between Gini Index and Unemployment
@@ -366,6 +373,12 @@ Add interaction between gini index and unemployment to the model
 multi_fit = lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment, data = hate_crime_reg_df)
 
 summary(multi_fit)
+```
+
+ANOVA
+
+```{r}
+anova(multi_fit)
 ```
 
 ### Interaction between gini index and urbanization
