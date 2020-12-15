@@ -12,6 +12,9 @@ library(leaps)
 library(olsrr)
 library(mgcv)
 library(modelr)
+library(arsenal)
+
+set.seed(1)
 ```
 
 ## Import dataset
@@ -47,12 +50,68 @@ hate_crime_df =
 
 ## Descriptive Data Analysis
 
-Below is a summary table of all continuous variables, including the response.
+### Catrgorical Variables
+
+Unemployment
 
 ```{r}
-
+hate_crime_df %>% 
+  group_by(unemployment) %>% 
+  summarise(
+    count = n(),
+    percentage = n()/nrow(hate_crime_df)
+  ) %>% 
+  knitr::kable(digits = 2)
 ```
 
+Urbanization
+
+```{r}
+hate_crime_df %>% 
+  group_by(urbanization) %>% 
+  summarise(
+    count = n(),
+    percentage = n()/nrow(hate_crime_df)
+  ) %>% 
+  knitr::kable(digits = 2)
+```
+
+Below is a summary table of all continuous variables group by unemployment status.
+
+```{r, results="asis"}
+my_controls = tableby.control(
+  test = F,
+  numeric.stats = c("meansd", "medianq1q3", "range"),
+  cat.stats = c("countpct", "Nmiss2"),
+  stats.labels = list(
+    meansd = "Mean (SD)",
+    medianq1q3 = "Median (Q1, Q3)",
+    range = "Min - Max"
+  )
+)
+
+table_one <- tableby(
+  unemployment ~ hate_crimes_per_100k_splc + median_household_income + perc_population_with_high_school_degree + perc_non_citizen + perc_non_white + gini_index, 
+  data = hate_crime_df,
+  control = my_controls
+)
+
+summary(table_one,
+        title = "Summary Statistic by Unemployment") 
+```
+
+Then a summary table of all continuous variables group by urbanization status.
+
+```{r, results="asis"}
+table_two <- tableby(
+  urbanization ~ hate_crimes_per_100k_splc + median_household_income + perc_population_with_high_school_degree + perc_non_citizen + perc_non_white + gini_index, 
+  data = hate_crime_df,
+  control = my_controls
+)
+
+summary(table_two,
+        title = "Summary Statistic by Urbanization") 
+```
 
 ## Normality Test
 
@@ -93,7 +152,11 @@ hate_crime_df %>%
 trans_hate_crime_df %>% 
   ggplot(aes(x = hate_crimes_per_100k_splc, y = ..density..)) +
   geom_histogram(binwidth = 0.1, colour = "black", alpha = 0.1) +
-  geom_density(alpha = 0.4)
+  geom_density(alpha = 0.4) +
+  labs(
+    x = "log hate crime rate",
+    title = "Distribution of Log Hate Crime Rate"
+  )
 ```
 
 qq plot
@@ -101,6 +164,7 @@ qq plot
 ```{r}
 qqnorm(trans_hate_crime_df$hate_crimes_per_100k_splc, col=2, pch=19, cex=1.5)
 qqline(trans_hate_crime_df$hate_crimes_per_100k_splc, col = 1,lwd=2,lty=2)
+title(sub = "* After taking log transformation", font.sub = 3)
 ```
 
 It's much better now.
@@ -326,9 +390,9 @@ multi_fit_4 =
   map(.x = train, ~lm(hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index + urbanization, data=.x))
       ) %>% 
   mutate(
-    rmse_fit_2 = map2_dbl(multi_fit_2, test, ~rmse(model = .x, data = .y)),
-    rmse_fit_3 = map2_dbl(multi_fit_3, test, ~rmse(model = .x, data = .y)),
-    rmse_fit_4 = map2_dbl(multi_fit_4, test, ~rmse(model = .x, data = .y)))
+    rmse_mod_2_preds = map2_dbl(multi_fit_2, test, ~rmse(model = .x, data = .y)),
+    rmse_mode_3_preds = map2_dbl(multi_fit_3, test, ~rmse(model = .x, data = .y)),
+    rmse_model_4_preds = map2_dbl(multi_fit_4, test, ~rmse(model = .x, data = .y)))
 ```
 
 Make plots of RMSE vs model
