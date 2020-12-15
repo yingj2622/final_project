@@ -413,6 +413,9 @@ We decide to choose the model with two predictors: perc_population_with_high_sch
 
 ```{r}
 multi_fit_start = lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data=hate_crime_reg_df)
+
+broom::tidy(multi_fit_start) %>% 
+  knitr::kable(digits = 3)
 ```
 
 ## Model Modification
