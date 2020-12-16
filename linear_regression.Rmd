@@ -431,6 +431,15 @@ broom::tidy(multi_fit_start) %>%
 
 ### Interaction between Gini Index and Unemployment
 
+Our previous selected model
+
+```{r}
+model_select = lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data=hate_crime_reg_df)
+
+summary(model_select)
+```
+
+
 stratify by unemployment
 
 ```{r}
@@ -448,12 +457,20 @@ Add interaction between gini index and unemployment to the model
 multi_fit = lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment, data = hate_crime_reg_df)
 
 summary(multi_fit)
+broom::tidy(multi_fit) %>% 
+  knitr::kable(digits = 3)
 ```
 
 ANOVA
 
 ```{r}
 anova(multi_fit)
+```
+
+ANOVA Comparison
+
+```{r}
+anova(model_select,multi_fit)
 ```
 
 Stratified models
@@ -468,20 +485,20 @@ hate_crime_reg_df %>%
 multi_fit_low_unemp = 
   lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data = reg_low_unemp_df)
 
-  summary(multi_fit_low_unemp)
+summary(multi_fit_low_unemp)
 ```
 
 High unemployment: A negative, but not statistically significant association b/w gini index and hate crime rate
 
 ```{r}
-  reg_high_unemp_df =  
+reg_high_unemp_df =  
 hate_crime_reg_df %>% 
   filter(unemployment == "high") 
 
 multi_fit_high_unemp = 
   lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index, data = reg_high_unemp_df)
 
-  summary(multi_fit_high_unemp)
+summary(multi_fit_high_unemp)
 ```
 
 ### Interaction between gini index and urbanization
@@ -498,3 +515,50 @@ hate_crime_reg_df %>%
 The two line are parallel. There is no interaction between gini index and urbanization
 
  
+## K-fold CV
+
+```{r}
+cv_df_2 = 
+  hate_crime_reg_df %>% 
+  crossv_mc(1000) %>% 
+  mutate(
+    model_small = map(train, ~lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index, data = .x)),
+    model_large = map(train, ~lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment,data = .x))
+  ) %>% 
+
+  mutate(
+    rmse_model_small = map2_dbl(model_small, test, ~rmse(model = .x, data = .y)),
+    rmse_model_large = map2_dbl(model_large, test, ~rmse(model = .x, data = .y))
+  )
+   
+``` 
+
+Make plots of RMSE vs model
+
+```{r}
+cv_df_2 %>% 
+   dplyr::select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin() 
+```
+ 
+Add residual of Large Model
+ 
+
+
+```{r}
+hate_crime_reg_df %>% 
+  add_predictions(model = multi_fit, var = "pred") %>% 
+  add_residuals(model = multi_fit, var = "resid") %>%
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = 0.5, color = "blue", size = 3) +
+  geom_smooth(se = F, color = "red", method = "lm") + 
+  labs(title = "Model residuals vs. Fitted values", 
+       y = "Residuals",
+       x = "Fitted Value")
+```
