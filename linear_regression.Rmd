@@ -85,11 +85,46 @@ hate_crime_df %>%
   knitr::kable(digits = 2)
 ```
 
+
+
+```{r}
+gini_level = 
+  hate_crime_df %>% 
+  mutate(
+    gini_index = case_when(
+     gini_index >= 0.455 ~ 'High',
+     gini_index < 0.455 ~ 'Low'
+    ))
+
+
+my_controls = tableby.control(
+  test = T,
+  numeric.stats = c("meansd", "medianq1q3", "range"),
+  cat.stats = c("countpct", "Nmiss2"),
+  stats.labels = list(
+    meansd = "Mean (SD)",
+    medianq1q3 = "Median (Q1, Q3)",
+    range = "Min - Max"
+  )
+)
+
+table_one <- tableby(
+  gini_index ~ urbanization + unemployment + median_household_income + perc_population_with_high_school_degree + perc_non_citizen + perc_non_white + hate_crimes_per_100k_splc, 
+  data = gini_level,
+  control = my_controls
+)
+
+summary(table_one,
+        title = "Summary Statistic by level of hate crime rate"， text = T) 
+```
+We can find there is potential for confounding or interactivity in unemployment, perc_population_with_high_school_degree,perc_non_white as level of hate crime rate have large difference in distribution in these variable.
+
+
 Below is a summary table of all continuous variables group by unemployment status.
 
 ```{r, results="asis"}
 my_controls = tableby.control(
-  test = F,
+  test = T,
   numeric.stats = c("meansd", "medianq1q3", "range"),
   cat.stats = c("countpct", "Nmiss2"),
   stats.labels = list(
@@ -106,7 +141,7 @@ table_one <- tableby(
 )
 
 summary(table_one,
-        title = "Summary Statistic by Unemployment") 
+        title = "Summary Statistic by Unemployment"， text = T) 
 ```
 
 Then a summary table of all continuous variables group by urbanization status.
@@ -119,12 +154,12 @@ table_two <- tableby(
 )
 
 summary(table_two,
-        title = "Summary Statistic by Urbanization") 
+        title = "Summary Statistic by Urbanization", text = T) 
 ```
 
 ## Normality Test
 
-histogram
+Histogram
 
 ```{r}
 hate_crime_df %>% 
@@ -188,7 +223,7 @@ trans_hate_crime_df %>%
   geom_point() +
   geom_smooth(method = "lm", se = F, color = "red") +
   labs(
-    y = "ln hate crime rate",
+    y = "ln(hate crime rate)",
     x = "gini index",
     title = "Gini Index vs Hate Crime Rate",
     caption = "Include all states except ones with NAs"
@@ -204,7 +239,8 @@ fit_all = lm(hate_crimes_per_100k_splc ~.-state, data = trans_hate_crime_df)
 
 summary(fit_all)
 
-par(mfrow=c(1,2))
+
+par(mfrow=c(2,2))
 plot(fit_all)
 ```
 
@@ -220,7 +256,7 @@ fit_all_no_dc = lm(hate_crimes_per_100k_splc ~.-state, data = trans_hate_crime_d
 
 summary(fit_all_no_dc)
 
-par(mfrow=c(1,2))
+par(mfrow=c(2,2))
 plot(fit_all_no_dc)
 ```
 
@@ -340,12 +376,12 @@ Plots of C_p, Adj-R^2 and BIC for all the best subsets
 par(mar=c(4,4,1,1))
 par(mfrow=c(2,2))
 
-plot(2:7, rs$cp, xlab="No of parameters", ylab="Cp Statistic")
+plot(2:7, rs$cp, xlab="NO. of parameters", ylab="Cp Statistic")
 abline(0,1)
 
-plot(2:7, rs$adjr2, xlab="No of parameters", ylab="Adj R2")
+plot(2:7, rs$adjr2, xlab="NO. of parameters", ylab="Adj R2")
 
-plot(2:7, rs$bic, xlab="No of parameters", ylab="BIC")
+plot(2:7, rs$bic, xlab="NO. of parameters", ylab="BIC")
 abline(0,1)
 ```
 
@@ -355,7 +391,8 @@ Compare models with 2, 3, 4 predictors
 hate_crime_reg_df %>% 
   nest(state:hate_crimes_per_100k_splc) %>% 
   mutate(
-    multi_fit_2 = map(.x = data, ~lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data=.x)),
+    multi_fit_2 = 
+      map(.x = data, ~lm(hate_crimes_per_100k_splc ~ perc_population_with_high_school_degree + gini_index, data=.x)),
 multi_fit_3 = 
   map(.x = data, ~lm(hate_crimes_per_100k_splc ~ unemployment + perc_population_with_high_school_degree + gini_index, data=.x)),
 multi_fit_4 = 
@@ -547,18 +584,32 @@ cv_df_2 %>%
   ggplot(aes(x = model, y = rmse)) + geom_violin() 
 ```
  
-Add residual of Large Model
- 
+##Model diagnostic
 
+Check model assumption 
+ 
+```{r}
+par(mfrow=c(2,2))
+plot(multi_fit)
+```
+
+Check goodness of fit
 
 ```{r}
-hate_crime_reg_df %>% 
-  add_predictions(model = multi_fit, var = "pred") %>% 
-  add_residuals(model = multi_fit, var = "resid") %>%
-  ggplot(aes(x = pred, y = resid)) + 
-  geom_point(alpha = 0.5, color = "blue", size = 3) +
-  geom_smooth(se = F, color = "red", method = "lm") + 
-  labs(title = "Model residuals vs. Fitted values", 
-       y = "Residuals",
-       x = "Fitted Value")
+summary(multi_fit)
+```
+
+
+Add residual of Large Model
+
+```{r}
+# hate_crime_reg_df %>% 
+#   add_predictions(model = multi_fit, var = "pred") %>% 
+#   add_residuals(model = multi_fit, var = "resid") %>%
+#   ggplot(aes(x = pred, y = resid)) + 
+#   geom_point(alpha = 0.5, color = "blue", size = 3) +
+#   geom_smooth(se = F, color = "red", method = "lm") + 
+#   labs(title = "Model residuals vs. Fitted values", 
+#        y = "Residuals",
+#        x = "Fitted Value")
 ```
