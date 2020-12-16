@@ -15,6 +15,15 @@ library(modelr)
 library(arsenal)
 
 set.seed(1)
+
+knitr::opts_chunk$set(
+ echo = TRUE,
+ warning = F,   
+ message = F,
+ fig.width = 12,
+ fig.height = 8,
+ # fig.asp = 0.618,
+ out.width = "90%")
 ```
 
 ## Import dataset
