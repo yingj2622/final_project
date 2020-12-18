@@ -589,6 +589,7 @@ cv_df_2 %>%
 Check model assumption 
  
 ```{r}
+par(mar=c(4,4,1,1))
 par(mfrow=c(2,2))
 plot(multi_fit)
 ```
