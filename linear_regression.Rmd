@@ -21,7 +21,7 @@ knitr::opts_chunk$set(
  warning = F,   
  message = F,
  fig.width = 6,
- fig.height = 4,
+ fig.height = 6,
  # fig.asp = 0.618,
  out.width = "100%")
 ```
@@ -589,28 +589,62 @@ cv_df_2 %>%
 Check model assumption 
  
 ```{r}
-par(mar=c(4,4,1,1))
+
 par(mfrow=c(2,2))
 plot(multi_fit)
 ```
 
-Check goodness of fit
+indentify potential influential outlier observation 2
+
+exclude observation2 to see its impact to the model
 
 ```{r}
-summary(multi_fit)
+hate_crime_reg_no2 = 
+  hate_crime_reg_df[-c(2),]
+
+multi_fit_no2 = lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment, data = hate_crime_reg_no2)
+
+summary(multi_fit_no2)
+broom::tidy(multi_fit_no2) %>% 
+  knitr::kable(digits = 3)
+
+
+
+par(mfrow=c(2,2))
+plot(multi_fit_no2)
+  
 ```
 
 
-Add residual of Large Model
+Second time cross validation
 
 ```{r}
-# hate_crime_reg_df %>% 
-#   add_predictions(model = multi_fit, var = "pred") %>% 
-#   add_residuals(model = multi_fit, var = "resid") %>%
-#   ggplot(aes(x = pred, y = resid)) + 
-#   geom_point(alpha = 0.5, color = "blue", size = 3) +
-#   geom_smooth(se = F, color = "red", method = "lm") + 
-#   labs(title = "Model residuals vs. Fitted values", 
-#        y = "Residuals",
-#        x = "Fitted Value")
+cv_df_3 = 
+  hate_crime_reg_no2 %>% 
+  crossv_mc(1000) %>% 
+  mutate(
+    model_small = map(train, ~lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index, data = .x)),
+    model_large = map(train, ~lm(hate_crimes_per_100k_splc ~  perc_population_with_high_school_degree + gini_index*unemployment,data = .x))
+  ) %>% 
+
+  mutate(
+    rmse_model_small = map2_dbl(model_small, test, ~rmse(model = .x, data = .y)),
+    rmse_model_large = map2_dbl(model_large, test, ~rmse(model = .x, data = .y))
+  )
+   
+``` 
+
+Make plots of RMSE vs model
+
+```{r}
+cv_df_3 %>% 
+   dplyr::select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin() 
 ```
+
