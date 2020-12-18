@@ -20,10 +20,10 @@ knitr::opts_chunk$set(
  echo = TRUE,
  warning = F,   
  message = F,
- fig.width = 12,
- fig.height = 8,
+ fig.width = 6,
+ fig.height = 4,
  # fig.asp = 0.618,
- out.width = "90%")
+ out.width = "100%")
 ```
 
 ## Import dataset
@@ -115,7 +115,7 @@ table_one <- tableby(
 )
 
 summary(table_one,
-        title = "Summary Statistic by level of hate crime rate"， text = T) 
+        title = "Summary Statistic by level of hate crime rate", text = T) 
 ```
 We can find there is potential for confounding or interactivity in unemployment, perc_population_with_high_school_degree,perc_non_white as level of hate crime rate have large difference in distribution in these variable.
 
@@ -141,7 +141,7 @@ table_one <- tableby(
 )
 
 summary(table_one,
-        title = "Summary Statistic by Unemployment"， text = T) 
+        title = "Summary Statistic by Unemployment", text = T) 
 ```
 
 Then a summary table of all continuous variables group by urbanization status.
